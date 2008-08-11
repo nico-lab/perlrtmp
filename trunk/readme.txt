@@ -1,47 +1,47 @@
 
-������
+○名称
 
   perlRTMP - perl rtmp server
 
-���@�\
+○機能
 
-  MPEG-2 TS �t�@�C���� Flash �v���[���[�փX�g���[�~���O����B
-  �Ή����Ă���͉̂f�� H264�A���� AAC �� TS �t�@�C���̂݁B
+  MPEG-2 TS ファイルを Flash プレーヤーへストリーミングする。
+  対応しているのは映像 H264、音声 AAC の TS ファイルのみ。
 
-  �������Z�O�� TS �t�@�C���ł�������e�X�g���Ă��܂���B
+  ※ワンセグの TS ファイルでしか動作テストしていません。
 
-���K�v�Ȃ���
+○必要なもの
 
-  �����炭�ǉ��C���X�g�[�����K�v�ȃ��C�u���������L�ł��B
+  おそらく追加インストールが必要なライブラリが下記です。
 
     Digest::SHA
 
-  yum ���ł���Ή��L�R�}���h�ŃC���X�g�[�����Ă��������B
+  yum 環境であれば下記コマンドでインストールしてください。
 
     # yum install perl-Digest-SHA
 
-���g����
+○使い方
 
-  �W�J�����f�B���N�g���ŁA
+  展開したディレクトリで、
 
     $ perl server.pl <document root>
 
-  <document root> �� TS �t�@�C���̂���f�B���N�g�����w��B
-  �����Ŏw�肵���f�B���N�g�� + NetStream.play() �̃t�@�C���������ۂ̃t�@�C���p�X�ɂȂ�܂��B
+  <document root> は TS ファイルのあるディレクトリを指定。
+  ここで指定したディレクトリ + NetStream.play() のファイル名が実際のファイルパスになります。
 
-  Flash �v���[���[�� JW FLV MEDIA PLAYER 4.0 �𐄏��B
+  Flash プレーヤーは JW FLV MEDIA PLAYER 4.0 を推奨。
 
   JW FLV MEDIA PLAYER 4.0
   http://www.jeroenwijering.com/?item=JW_FLV_Media_Player
 
-  ���L�� HTML ���쐬���ău���E�U�ŊJ���B
+  下記の HTML を作成してブラウザで開く。
 
-  192.168.xxx.xxx �̕����� perlRTMP �𑖂点�Ă���}�V���� IP �A�h���X���L�q�B
-  test.ts �͑��݂���t�@�C�������L�q�B
+  192.168.xxx.xxx の部分は perlRTMP を走らせているマシンの IP アドレスを記述。
+  test.ts は存在するファイル名を記述。
 
-  ��vod �����i�A�v���P�[�V�������j�� perlRTMP �ł͕K�v����܂��񂪁A
-    JW FLV MEDIA PLAYER �̎d�l��Ȃɂ��L�q����K�v�����邽�ߏ����Ă���܂��B
-    ���ۂ̃t�@�C���p�X�� <document root> �� vod/ �ȍ~�𑫂������̂ł��B
+  ※vod 部分（アプリケーション名）は perlRTMP では必要ありませんが、
+    JW FLV MEDIA PLAYER の仕様上なにか記述する必要があるため書いてあります。
+    実際のファイルパスは <document root> に vod/ 以降を足したものです。
 
 -------------------------------------------------------------
 <html>
@@ -60,22 +60,31 @@ s1.write('preview');
 </html>
 -------------------------------------------------------------
 
-  �Z�L�����e�B�x�����o��ꍇ�� JW FLV MEDIA PLAYER ��u�����f�B���N�g����
-  �����Ă��������B
+  セキュリティ警告が出る場合は JW FLV MEDIA PLAYER を置いたディレクトリを
+  許可してください。
 
-�����ӎ���
+○ActivePerl、Cygwin 環境で使う場合
 
-  �����Z�O�� TS �t�@�C�����X�g���[�~���O���邽�߂ɕK�v�ȕ���������������Ă��܂���B
-  RTMP�AAMF �Ȃǖ��Ή��ȃt�@���N�V�������������񂠂�܂��B
+  lib/TS.pm 42行目付近の O_LARGEFILE を O_BINARY に修正してください。
+  Perl 5.10 からは Digest::SHA が標準モジュールになっているのでインストール不要です。
 
-  perl �̎��s���x��A�����炭�T�X�g���[���������炢�����E�ł��B
+○注意事項
 
-���Q�l������
+  ワンセグの TS ファイルをストリーミングするために必要な部分しか実装されていません。
+  RTMP、AMF など未対応なファンクションがたくさんあります。
+
+  perl の実行速度上、おそらく５ストリーム同時くらいが限界です。
+
+  1 ファイルで 25 時間以上ある動画はうまく再生できません。
+  これは約 26 時間 30 分で巡回してしまう PTS をつかった計算を
+  比較対象が 25 時間以上離れていたら巡回したとみなす方法で行っているためです。
+
+○参考＆感謝
 
   RubyIZUMI by Takuma Mori
   http://code.google.com/p/rubyizumi/
 
-  TSConverter by �e���~��
+  TSConverter by テルミン
   http://theremin.890m.com/oneseg.htm
 
   mplex13818
@@ -84,8 +93,14 @@ s1.write('preview');
   mpeg4ip
   http://www.mpeg4ip.net/
 
-���X�V����
+○更新履歴
+
+  ver 1,0,0,4
+    メモリーリークしていたのを解消。
+    4 時間 40 分（16777 秒）以降にシークすると再生タイムがおかしくなるのを修正。
+    PTS の巡回判定を 25 時間以上離れていたらに変更（変更前は約 13 時間 15 分以上離れていたら）。
+    音声情報が二ヶ国語放送のときにチャンネル数を強制的に 2 にするようにした。
 
   ver 1,0,0,0
-    ����
+    初版
 

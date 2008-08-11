@@ -1,6 +1,7 @@
 package RTMP::Serializer;
 
 use strict;
+use Scalar::Util qw(weaken);
 use RTMP::Packet;
 use RTMP::FrameBuffer;
 
@@ -21,6 +22,7 @@ sub new {
 	my $s = bless $hash, $pkg;
 
 	$s->{frame_buffer} = RTMP::FrameBuffer->new();
+	weaken($s->{rtmp});
 
 	return $s;
 }
@@ -56,17 +58,27 @@ sub serialize {
 		$put->setShort($frame_number);
 	}
 
+	my $timer = $packet->{timer};
+
+	if (0xFFFFFF <= $packet->{timer}) {
+		$timer = 0xFFFFFF;
+	}
+
 	if ($packet_type == 0) {
-		$put->setMedium($packet->{timer});
+		$put->setMedium($timer);
 		$put->setMedium($buffer->{length});
 		$put->setInt($packet->{data_type});
 		$put->setLong($packet->{obj});
 	} elsif ($packet_type == 1) {
-		$put->setMedium($packet->{timer});
+		$put->setMedium($timer);
 		$put->setMedium($buffer->{length});
 		$put->setInt($packet->{data_type});
 	} elsif ($packet_type == 2) {
-		$put->setMedium($packet->{timer});
+		$put->setMedium($timer);
+	}
+
+	if (0xFFFFFF <= $packet->{timer}) {
+		$put->setLong($packet->{timer});
 	}
 
 	my $len = $buffer->{length};

@@ -1,6 +1,7 @@
 package TS;
 
 use strict;
+use Scalar::Util qw(weaken);
 use base qw(TS::File);
 use Fcntl;
 use IO::Seekable;
@@ -22,6 +23,7 @@ sub new {
 	$s->{header} = TS::Header->new($s);
 	$s->{duration} = 0;
 	$s->reset();
+	weaken($s->{rtmp});
 
 	return $s;
 }

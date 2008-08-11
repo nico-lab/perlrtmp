@@ -1,6 +1,7 @@
 package RTMP;
 
 use strict;
+use Scalar::Util qw(weaken);
 use RTMP::Handshake;
 use RTMP::Serializer;
 use RTMP::Method;
@@ -27,6 +28,7 @@ sub new {
 	$s->{serializer} = RTMP::Serializer->new($s);
 	$s->{method} = RTMP::Method->new($s);
 	$s->{buffer} = Binary->new();
+	weaken($s->{sock});
 
 	return $s;
 }

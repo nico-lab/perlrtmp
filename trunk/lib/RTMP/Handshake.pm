@@ -1,6 +1,7 @@
 package RTMP::Handshake;
 
 use strict;
+use Scalar::Util qw(weaken);
 use Digest::SHA qw(hmac_sha256);
 
 use constant HANDSHAKE_CLIENT_TO_SERVER => 0;
@@ -124,6 +125,8 @@ sub new {
 	};
 
 	my $s = bless $hash, $pkg;
+
+	weaken($s->{rtmp});
 
 	return $s;
 }

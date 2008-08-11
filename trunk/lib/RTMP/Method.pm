@@ -1,6 +1,7 @@
 package RTMP::Method;
 
 use strict;
+use Scalar::Util qw(weaken);
 use RTMP::Packet;
 use RTMP::AMF;
 
@@ -13,6 +14,7 @@ sub new {
 
 	my $s = bless $hash, $pkg;
 
+	weaken($s->{rtmp});
 
 	return $s;
 }
@@ -58,7 +60,7 @@ sub connect {
 			key => 'fmsVer',
 			value => {
 				type => RTMP::AMF::AMF_STRING,
-				data => 'perlRTMP/1,0,0,0',
+				data => 'perlRTMP/1,0,0,4',
 			},
 		},
 	];
