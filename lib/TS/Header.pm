@@ -1,6 +1,7 @@
 package TS::Header;
 
 use strict;
+use Scalar::Util qw(weaken);
 use base qw(TS::File);
 use IO::Seekable;
 use TS::PTS;
@@ -13,11 +14,11 @@ sub new {
 	my $s = $pkg->SUPER::new();
 
 	$s->{ts} = $ts;
-
 	$s->{_first_pts} = undef;
 	$s->{_last_pts} = undef;
 	$s->{_pts} = undef;
 	$s->{_first} = 0;
+	weaken($s->{ts});
 
 	return $s;
 }

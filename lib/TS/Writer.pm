@@ -1,6 +1,7 @@
 package TS::Writer;
 
 use strict;
+use Scalar::Util qw(weaken);
 use RTMP::Packet;
 use TS::PTS;
 use TS::H264;
@@ -18,6 +19,8 @@ sub new {
 	};
 
 	my $s = bless $hash, $pkg;
+
+	weaken($s->{ts});
 
 	return $s;
 }
@@ -81,7 +84,7 @@ sub send {
 		if ($s->{audio_first}) {
 			my $profile = $s->getAudioProfile($frame);
 			my $frequency = $frame->{frame}->{frequency};
-			my $channel = $frame->{frame}->{channel};
+			my $channel = $s->getAudioChannel($frame);
 			my $decSpecificInfo = $profile << 11 | $frequency << 7 | $channel << 3;
 
 			my $audio_extra = pack('H*', 'af00');
@@ -123,6 +126,18 @@ sub getAudioProfile {
 	}
 
 	return 0;
+}
+
+sub getAudioChannel {
+	my($s, $frame) = @_;
+
+	my $channel = $frame->{frame}->{channel};
+
+	if ($channel == 0) {
+		return 2;
+	}
+
+	return $channel;
 }
 
 sub getVideoHeader {

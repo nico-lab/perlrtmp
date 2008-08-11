@@ -3,6 +3,7 @@ package TS::PTS;
 use strict;
 
 use constant PTS_MAX => 2 ** 33;
+use constant PTS_CONTINUITY => 60 * 60 * 25 * 90000;
 
 sub plus {
 	my($a, $b) = @_;
@@ -42,7 +43,7 @@ sub length {
 
 sub continuity {
 	my($a, $b) = @_;
-	return PTS_MAX / 2 < abs($a - $b);
+	return PTS_CONTINUITY < abs($a - $b);
 }
 
 sub min {
