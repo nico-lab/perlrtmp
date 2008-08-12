@@ -60,7 +60,7 @@ sub connect {
 			key => 'fmsVer',
 			value => {
 				type => RTMP::AMF::AMF_STRING,
-				data => 'perlRTMP/1,0,0,4',
+				data => 'perlRTMP/1,0,0,5',
 			},
 		},
 	];
@@ -310,6 +310,118 @@ sub seekNotify {
 	my $data_type = 20;
 	my $obj = 0x01000000;
 	my $packet = RTMP::Packet->new($frame,$time,$data,$data_type,$obj);
+
+	$s->{rtmp}->{serializer}->send($packet);
+}
+
+sub pauseNotify {
+	my($s, $type) = @_;
+
+	my $option = [
+		{
+			key => 'code',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'NetStream.Pause.Notify',
+			},
+		},
+		{
+			key => 'level',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'status',
+			},
+		},
+		{
+			key => 'description',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => '-',
+			},
+		},
+	];
+
+	my @dump = (
+		{
+			type => RTMP::AMF::AMF_STRING,
+			data => 'onStatus',
+		},
+		{
+			type => RTMP::AMF::AMF_NUMBER,
+			data => 0,
+		},
+		{
+			type => RTMP::AMF::AMF_NIL,
+		},
+		{
+			type => RTMP::AMF::AMF_HASH,
+			data => $option,
+		},
+	);
+
+	my $data = RTMP::AMF::dumpArray(@dump);
+
+	my $frame = $type << 6 | 5;
+	my $timer = 0;
+	my $data_type = 20;
+	my $obj = 0x01000000;
+	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
+
+	$s->{rtmp}->{serializer}->send($packet);
+}
+
+sub playStop {
+	my($s, $type) = @_;
+
+	my $option = [
+		{
+			key => 'code',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'NetStream.Play.Stop',
+			},
+		},
+		{
+			key => 'level',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'status',
+			},
+		},
+		{
+			key => 'description',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => '-',
+			},
+		},
+	];
+
+	my @dump = (
+		{
+			type => RTMP::AMF::AMF_STRING,
+			data => 'onStatus',
+		},
+		{
+			type => RTMP::AMF::AMF_NUMBER,
+			data => 0,
+		},
+		{
+			type => RTMP::AMF::AMF_NIL,
+		},
+		{
+			type => RTMP::AMF::AMF_HASH,
+			data => $option,
+		},
+	);
+
+	my $data = RTMP::AMF::dumpArray(@dump);
+
+	my $frame = $type << 6 | 5;
+	my $timer = 0;
+	my $data_type = 20;
+	my $obj = 0x01000000;
+	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
 
 	$s->{rtmp}->{serializer}->send($packet);
 }
