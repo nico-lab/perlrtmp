@@ -22,6 +22,7 @@ sub new {
 	$s->{writer} = TS::Writer->new($s);
 	$s->{header} = TS::Header->new($s);
 	$s->{duration} = 0;
+	$s->{pause} = 0;
 	$s->reset();
 	weaken($s->{rtmp});
 
@@ -30,16 +31,26 @@ sub new {
 
 sub reset {
 	my($s) = @_;
+	$s->{play} = 1;
 	$s->{start_pts} = undef;
-	$s->{send_pts} = undef;
-	$s->{send_time} = undef;
+	$s->{start_time} = undef;
 	$s->{pes_buffer}->reset();
 	$s->{frames} = [];
 }
 
 sub open {
 	my($s, $file) = @_;
-	sysopen($s->{handle}, $file, O_RDONLY | O_LARGEFILE);
+	my $opt = O_RDONLY | O_BINARY;
+
+	eval {
+		$opt |= O_LARGEFILE;
+	};
+
+	if ($@) {
+		warn "[NOTICE] not defined O_LARGEFILE\n";
+	}
+
+	sysopen($s->{handle}, $file, $opt);
 	$s->{duration} = $s->{header}->duration();
 }
 
@@ -58,9 +69,29 @@ sub seek {
 	return $current * 1000;
 }
 
+sub pause {
+	my($s, $flag) = @_;
+	$s->{pause} = $flag;
+
+	if (!$flag) {
+		$s->{start_pts} = $s->{frames}->[0]->{pts};
+		$s->{start_time} = time() + BUFFER_LENGTH;
+	}
+}
+
+sub complete {
+	my($s) = @_;
+	$s->{play} = 0;
+	$s->{writer}->playStatus();
+	$s->{rtmp}->complete();
+}
+
 sub execute {
 	my($s) = @_;
-	$s->parse();
+
+	if ($s->{play} && !$s->{pause}) {
+		$s->parse();
+	}
 }
 
 sub video {
@@ -112,6 +143,7 @@ sub parsePayload {
 
 		if (!defined $s->{start_pts} && $p->{frames}->[$i]->{keyframe}) {
 			$s->{start_pts} = $pts;
+			$s->{start_time} = time();
 		}
 
 		if (defined $s->{start_pts} && TS::PTS::lessOrEqual($s->{start_pts}, $pts)) {
@@ -138,6 +170,12 @@ sub sendFrame {
 
 	my $send_pts = TS::PTS::min($video->{pts}, $audio->{pts});
 
+	my $sent_time = time() - $s->{start_time} + BUFFER_LENGTH;
+	my $sent_pts = TS::PTS::plus($s->{start_pts}, $sent_time * 90000);
+
+	my $fileno = fileno($s->{rtmp}->{sock});
+	my $rin = pack('C', 1 << $fileno);
+
 	@{$s->{frames}} = sort {TS::PTS::compare($a->{pts}, $b->{pts})} @{$s->{frames}};
 
 	while (0 < @{$s->{frames}}) {
@@ -145,25 +183,18 @@ sub sendFrame {
 			last;
 		}
 
+		if (TS::PTS::lessThan($sent_pts, $s->{frames}->[0]->{pts})) {
+			$s->{break} = 1;
+			last;
+		}
+
+		if (select(my $rout = $rin, undef, undef, 0)) {
+			$s->{break} = 1;
+			last;
+		}
+
 		my $frame = shift @{$s->{frames}};
 		$s->{writer}->send($frame);
-	}
-
-	if (!defined $s->{send_pts}) {
-		$s->{send_pts} = $send_pts;
-	}
-
-	if (!defined $s->{send_time}) {
-		$s->{send_time} = time - BUFFER_LENGTH;
-	}
-
-	my $sent_time = time - $s->{send_time};
-	my $sent_pts = TS::PTS::length($send_pts, $s->{send_pts}) / 90000;
-
-	if ($sent_time <= $sent_pts) {
-		$s->{send_pts} = $send_pts;
-		$s->{send_time} = time;
-		$s->{break} = 1;
 	}
 }
 

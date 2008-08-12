@@ -90,6 +90,10 @@ sub parse {
 			$b->{buf} .= $ts->{payload};
 		}
 	}
+
+	if (!$s->{break}) {
+		$s->complete();
+	}
 }
 
 sub pmt {
@@ -114,6 +118,10 @@ sub video {
 
 sub audio {
 	my($s, $ts, $b) = @_;
+}
+
+sub complete {
+	my($s) = @_;
 }
 
 sub parseTS {

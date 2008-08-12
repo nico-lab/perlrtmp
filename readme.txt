@@ -3,6 +3,8 @@
 
   perlRTMP - perl rtmp server
 
+  http://code.google.com/p/perlrtmp/
+
 ○機能
 
   MPEG-2 TS ファイルを Flash プレーヤーへストリーミングする。
@@ -41,7 +43,7 @@
 
   ※vod 部分（アプリケーション名）は perlRTMP では必要ありませんが、
     JW FLV MEDIA PLAYER の仕様上なにか記述する必要があるため書いてあります。
-    実際のファイルパスは <document root> に vod/ 以降を足したものです。
+    実際のファイルパスは <document root> に vod/ のあとを足したものです。
 
 -------------------------------------------------------------
 <html>
@@ -62,11 +64,6 @@ s1.write('preview');
 
   セキュリティ警告が出る場合は JW FLV MEDIA PLAYER を置いたディレクトリを
   許可してください。
-
-○ActivePerl、Cygwin 環境で使う場合
-
-  lib/TS.pm 42行目付近の O_LARGEFILE を O_BINARY に修正してください。
-  Perl 5.10 からは Digest::SHA が標準モジュールになっているのでインストール不要です。
 
 ○注意事項
 
@@ -94,6 +91,13 @@ s1.write('preview');
   http://www.mpeg4ip.net/
 
 ○更新履歴
+
+  ver 1,0,0,5
+    O_LARGEFILE が使えない環境でもエラーが出ないようにした。
+    再生完了で NetStream.Play.Stop と NetStream.Play.Complete を送信するようにした。
+    pause 命令に対応。
+    ※Flash Player が実際に pause 命令を送ってくるのは NetStream.pause() 後、
+      NetStream.bufferLength が 60 を超えてからのようです。
 
   ver 1,0,0,4
     メモリーリークしていたのを解消。

@@ -61,6 +61,9 @@ sub receive {
 			} elsif ($method eq 'seek') {
 				$s->seek($option);
 				warn "[rtmp] seek $option\n";
+			} elsif ($method eq 'pause') {
+				$s->pause($option);
+				warn "[rtmp] pause $option\n";
 			} elsif ($method eq 'closeStream') {
 				warn "[rtmp] closeStream\n";
 			} elsif ($method eq 'deleteStream') {
@@ -109,6 +112,33 @@ sub seek {
 	$s->{method}->commandBBB();
 	$s->{method}->seekNotify($time);
 	$s->{method}->playStart(1);
+}
+
+sub pause {
+	my($s, $flag) = @_;
+
+	if ($flag) {
+		$s->{file}->pause($flag);
+
+		$s->{method}->commandCCC();
+		$s->{method}->pauseNotify(1);
+	} else {
+		$s->{serializer}->setChankSize(RTMP::Serializer::PLAY_CHANK_SIZE);
+		$s->{serializer}->setChankMarker(RTMP::Serializer::PLAY_CHANK_MARKER);
+
+		$s->{method}->setChankSize();
+		$s->{method}->commandAAA();
+		$s->{method}->commandBBB();
+
+		$s->{file}->pause($flag);
+	}
+}
+
+sub complete {
+	my($s) = @_;
+
+	$s->{method}->commandCCC();
+	$s->{method}->playStop(1);
 }
 
 sub execute {
