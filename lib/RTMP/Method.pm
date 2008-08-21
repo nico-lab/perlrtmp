@@ -60,7 +60,7 @@ sub connect {
 			key => 'fmsVer',
 			value => {
 				type => RTMP::AMF::AMF_STRING,
-				data => 'perlRTMP/1,0,0,5',
+				data => 'perlRTMP/1,0,0,6',
 			},
 		},
 	];
