@@ -10,6 +10,7 @@ use TS::Writer;
 use TS::H264;
 use TS::AAC;
 use TS::PTS;
+use TS::PESBuffer;
 
 use constant BUFFER_LENGTH => 10;
 
@@ -21,6 +22,7 @@ sub new {
 	$s->{rtmp} = $rtmp;
 	$s->{writer} = TS::Writer->new($s);
 	$s->{header} = TS::Header->new($s);
+	$s->{pes_buffer} = TS::PESBuffer->new();
 	$s->{duration} = 0;
 	$s->{pause} = 0;
 	$s->reset();
@@ -40,17 +42,7 @@ sub reset {
 
 sub open {
 	my($s, $file) = @_;
-	my $opt = O_RDONLY | O_BINARY;
-
-	eval {
-		$opt |= O_LARGEFILE;
-	};
-
-	if ($@) {
-		warn "[NOTICE] not defined O_LARGEFILE\n";
-	}
-
-	sysopen($s->{handle}, $file, $opt);
+	$s->SUPER::open($file);
 	$s->{duration} = $s->{header}->duration();
 }
 
@@ -95,35 +87,57 @@ sub execute {
 }
 
 sub video {
-	my($s, $ts, $b) = @_;
+	my($s, $ts) = @_;
+
+	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
 	my $pes = $s->parsePES($ts);
 
-	if (defined $b->{pts}) {
-		my $p = TS::H264->new($b->{buf});
-		$b->{buf} = substr($b->{buf}, $p->{pos});
-		$s->parsePayload($ts, $b, $pes, $p);
-	}
+	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
+		if (defined $b->{pts}) {
+			my $p = TS::H264->new($b->{buf});
+			$b->{buf} = substr($b->{buf}, $p->{pos});
+			$s->parsePayload($ts, $b, $pes, $p);
+		}
 
-	$b->{pts} = $pes->{pts};
-	$s->sendFrame();
+		$b->{pts} = $pes->{pts};
+		$s->sendFrame();
+	}
 }
 
 sub audio {
-	my($s, $ts, $b) = @_;
+	my($s, $ts) = @_;
+
+	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
 	my $pes = $s->parsePES($ts);
 
-	if (defined $b->{pts}) {
-		my $p = TS::AAC->new($b->{buf});
-		$b->{buf} = substr($b->{buf}, $p->{pos});
-		$s->parsePayload($ts, $b, $pes, $p);
+	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
+		if (defined $b->{pts}) {
+			my $p = TS::AAC->new($b->{buf});
+			$b->{buf} = substr($b->{buf}, $p->{pos});
+			$s->parsePayload($ts, $b, $pes, $p);
+		}
+
+		$b->{pts} = $pes->{pts};
+		$s->sendFrame();
+	}
+}
+
+sub payload {
+	my($s, $ts) = @_;
+
+	my $b = $s->{pes_buffer}->getPES($ts->{pid});
+
+	if ($b->{buffering}) {
+		$b->{buf} .= $ts->{payload};
 	}
 
-	$b->{pts} = $pes->{pts};
-	$s->sendFrame();
+	if ($s->checkReceive()) {
+		$s->{break} = 1;
+	}
 }
 
 sub parsePayload {
@@ -173,9 +187,6 @@ sub sendFrame {
 	my $sent_time = time() - $s->{start_time} + BUFFER_LENGTH;
 	my $sent_pts = TS::PTS::plus($s->{start_pts}, $sent_time * 90000);
 
-	my $fileno = fileno($s->{rtmp}->{sock});
-	my $rin = pack('C', 1 << $fileno);
-
 	@{$s->{frames}} = sort {TS::PTS::compare($a->{pts}, $b->{pts})} @{$s->{frames}};
 
 	while (0 < @{$s->{frames}}) {
@@ -188,7 +199,7 @@ sub sendFrame {
 			last;
 		}
 
-		if (select(my $rout = $rin, undef, undef, 0)) {
+		if ($s->checkReceive()) {
 			$s->{break} = 1;
 			last;
 		}
@@ -196,6 +207,13 @@ sub sendFrame {
 		my $frame = shift @{$s->{frames}};
 		$s->{writer}->send($frame);
 	}
+}
+
+sub checkReceive {
+	my($s) = @_;
+	my $fileno = fileno($s->{rtmp}->{sock});
+	my $rin = pack('C', 1 << $fileno);
+	return select($rin, undef, undef, 0);
 }
 
 1;

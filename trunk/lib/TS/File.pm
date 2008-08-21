@@ -1,7 +1,6 @@
 package TS::File;
 
 use strict;
-use TS::PESBuffer;
 use Fcntl;
 
 use constant PACKET_SIZE => 188;
@@ -18,27 +17,27 @@ sub new {
 		handle => undef,
 		video_pid => undef,
 		audio_pid => undef,
-		pes_buffer => undef,
 		break => 0,
 	};
 
 	my $s = bless $hash, $pkg;
 
-	$s->{pes_buffer} = TS::PESBuffer->new();
-
 	return $s;
-}
-
-sub reset {
-	my($s) = @_;
-	$s->{video_pid} = undef;
-	$s->{audio_pid} = undef;
-	$s->{pes_buffer}->reset();
 }
 
 sub open {
 	my($s, $file) = @_;
-	sysopen($s->{handle}, $file, O_RDONLY | O_LARGEFILE);
+	my $opt = O_RDONLY | O_BINARY;
+
+	eval {
+		$opt |= O_LARGEFILE;
+	};
+
+	if ($@) {
+		warn "[NOTICE] not defined O_LARGEFILE\n";
+	}
+
+	sysopen($s->{handle}, $file, $opt);
 }
 
 sub close {
@@ -67,7 +66,6 @@ sub parse {
 		}
 
 		my $ts = $s->parseTS($buf);
-		my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 		if ($ts->{payload_unit_start_indicator}) {
 
@@ -78,17 +76,15 @@ sub parse {
 			}
 
 			if ($ts->{pid} == $s->{video_pid}) {
-				$s->video($ts, $b);
+				$s->video($ts);
 			}
 
 			if ($ts->{pid} == $s->{audio_pid}) {
-				$s->audio($ts, $b);
+				$s->audio($ts);
 			}
 		}
 
-		if ($b->{buffering}) {
-			$b->{buf} .= $ts->{payload};
-		}
+		$s->payload($ts);
 	}
 
 	if (!$s->{break}) {
@@ -113,11 +109,15 @@ sub pmt {
 }
 
 sub video {
-	my($s, $ts, $b) = @_;
+	my($s, $ts) = @_;
 }
 
 sub audio {
-	my($s, $ts, $b) = @_;
+	my($s, $ts) = @_;
+}
+
+sub payload {
+	my($s, $ts) = @_;
 }
 
 sub complete {

@@ -26,7 +26,10 @@ sub new {
 sub duration {
 	my($s) = @_;
 	$s->{handle} = $s->{ts}->{handle};
-	$s->reset();
+
+	$s->parse();
+	$s->{ts}->{video_pid} = $s->{video_pid};
+	$s->{ts}->{audio_pid} = $s->{audio_pid};
 
 	sysseek($s->{handle}, 0, SEEK_SET);
 	$s->{_first_pts} = $s->pts(1);
@@ -43,7 +46,6 @@ sub duration {
 sub current {
 	my($s) = @_;
 	$s->{handle} = $s->{ts}->{handle};
-	$s->reset();
 
 	my $current_pts = $s->pts(1);
 
@@ -59,14 +61,23 @@ sub pts {
 	return $s->{_pts};
 }
 
+sub pmt {
+	my($s, $ts) = @_;
+	$s->SUPER::pmt($ts);
+	$s->{break} = 1;
+}
+
 sub video {
-	my($s, $ts, $b) = @_;
+	my($s, $ts) = @_;
 
 	my $pes = $s->parsePES($ts);
-	$s->{_pts} = $pes->{pts};
 
-	if ($s->{_first}) {
-		$s->{break} = 1;
+	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
+		$s->{_pts} = $pes->{pts};
+
+		if ($s->{_first}) {
+			$s->{break} = 1;
+		}
 	}
 }
 
