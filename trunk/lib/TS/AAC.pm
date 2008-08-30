@@ -1,6 +1,7 @@
 package TS::AAC;
 
 use strict;
+use Scalar::Util qw(weaken);
 
 use constant AAC_START_CODE => 0xFFF0;
 use constant AAC_START_CODE_MASK => 0xFFF6;
@@ -10,16 +11,16 @@ use constant AAC_PROFILE_LC => 1;
 use constant AAC_PROFILE_SSR => 2;
 
 sub new {
-	my($pkg, $buf) = @_;
+	my($pkg, $buffer) = @_;
 
 	my $hash = {
-		buf => $buf,
-		pos => 0,
+		buffer => $buffer,
 		frames => [],
 	};
 
 	my $s = bless $hash, $pkg;
 
+	weaken($s->{buffer});
 	$s->parse();
 
 	return $s;
@@ -28,45 +29,45 @@ sub new {
 sub parse {
 	my($s) = @_;
 
-	my $last_pos = length($s->{buf});
+	while($s->{buffer}->{pos} < $s->{buffer}->{length}) {
 
-	while($s->{pos} < $last_pos) {
+		my $buffer = $s->{buffer}->clone();
 
-		my $find = $s->find_start_code($s->{pos});
+		my $find = $s->find_start_code($buffer);
 
-		if (!defined $find) {
+		if ($find == -1) {
 			last;
 		}
 
-		$find++;
+		$buffer->getInt();
 
-		my $a = vec($s->{buf}, $find++, 8);
+		my $a = $buffer->getInt();
 		my $protection_absent = $a & 0x01;
 
-		my $a = vec($s->{buf}, $find++, 8);
-		my $b = vec($s->{buf}, $find++, 8);
-		my $c = vec($s->{buf}, $find++, 8);
-		my $d = vec($s->{buf}, $find++, 8);
+		my $a = $buffer->getInt();
+		my $b = $buffer->getInt();
+		my $c = $buffer->getInt();
+		my $d = $buffer->getInt();
 		my $profile = $a >> 6 & 0x03;
 		my $sampling_frequency_index = $a >> 2 & 0x0F;
 		my $channel_configuration = ($a & 0x01) << 2 | $b >> 6 & 0x03;
 		my $length = ($b & 0x03) << 11 | $c << 3 | $d >> 5;
 
-		$find++;
+		$buffer->getInt();
 		$length -= AAC_HEADER_LENGTH;
 
 		if ($protection_absent == 0) {
-			$find++;
+			$buffer->getInt();
 			$length--;
-			$find++;
+			$buffer->getInt();
 			$length--;
 		}
 
-		if ($last_pos < $find + $length) {
+		if ($buffer->bytes_remain() < $length) {
 			last;
 		}
 
-		my $buf = substr($s->{buf}, $find, $length);
+		my $buf = $buffer->getBytes($length);
 
 		my $frame = {
 			profile => $profile,
@@ -77,26 +78,24 @@ sub parse {
 
 		push(@{$s->{frames}}, $frame);
 
-		$s->{pos} = $find + $length;
+		$s->{buffer}->{pos} = $buffer->{pos};
 	}
 }
 
 sub find_start_code {
-	my($s, $pos) = @_;
+	my($s, $buffer) = @_;
 
-	my $last_pos = length($s->{buf});
-
-	while($pos + AAC_HEADER_LENGTH < $last_pos) {
-		my $start_code = unpack('n', substr($s->{buf}, $pos, 2));
+	while($buffer->{pos} + AAC_HEADER_LENGTH < $buffer->{length}) {
+		my $start_code = unpack('n', substr($buffer->{buf}, $buffer->{pos}, 2));
 
 		if (($start_code & AAC_START_CODE_MASK) == AAC_START_CODE) {
-			return $pos;
+			return $buffer->{pos};
 		}
 
-		$pos++;
+		$buffer->{pos}++;
 	}
 
-	return undef;
+	return -1;
 }
 
 1;

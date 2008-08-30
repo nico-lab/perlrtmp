@@ -24,6 +24,7 @@ sub new {
 	$s->{header} = TS::Header->new($s);
 	$s->{pes_buffer} = TS::PESBuffer->new();
 	$s->{duration} = 0;
+	$s->{bytes} = 0;
 	$s->{pause} = 0;
 	$s->reset();
 	weaken($s->{rtmp});
@@ -43,6 +44,7 @@ sub reset {
 sub open {
 	my($s, $file) = @_;
 	$s->SUPER::open($file);
+	$s->{bytes} = $s->{header}->bytes();
 	$s->{duration} = $s->{header}->duration();
 }
 
@@ -52,9 +54,10 @@ sub seek {
 	$s->reset();
 	$s->{writer}->reset(1);
 
-	my $end = sysseek($s->{handle}, 0, SEEK_END);
-	my $seek = $end * (($time / 1000) / $s->{duration});
-	sysseek($s->{handle}, $seek, SEEK_SET);
+	if (0 < $s->{duration}) {
+		my $seek = $s->{bytes} * ($time / 1000 / $s->{duration});
+		sysseek($s->{handle}, $seek, SEEK_SET);
+	}
 
 	my $current = $s->{header}->current();
 
@@ -87,17 +90,17 @@ sub execute {
 }
 
 sub video {
-	my($s, $ts) = @_;
+	my($s, $ts, $buffer) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
-	my $pes = $s->parsePES($ts);
+	my $pes = $s->parsePES($buffer);
 
 	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
 		if (defined $b->{pts}) {
-			my $p = TS::H264->new($b->{buf});
-			$b->{buf} = substr($b->{buf}, $p->{pos});
+			my $p = TS::H264->new($b->{buffer});
+			$b->{buffer}->slide();
 			$s->parsePayload($ts, $b, $pes, $p);
 		}
 
@@ -107,17 +110,17 @@ sub video {
 }
 
 sub audio {
-	my($s, $ts) = @_;
+	my($s, $ts, $buffer) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
-	my $pes = $s->parsePES($ts);
+	my $pes = $s->parsePES($buffer);
 
 	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
 		if (defined $b->{pts}) {
-			my $p = TS::AAC->new($b->{buf});
-			$b->{buf} = substr($b->{buf}, $p->{pos});
+			my $p = TS::AAC->new($b->{buffer});
+			$b->{buffer}->slide();
 			$s->parsePayload($ts, $b, $pes, $p);
 		}
 
@@ -127,15 +130,15 @@ sub audio {
 }
 
 sub payload {
-	my($s, $ts) = @_;
+	my($s, $ts, $buffer) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	if ($b->{buffering}) {
-		$b->{buf} .= $ts->{payload};
+		$b->{buffer}->append($buffer->getBytes($buffer->bytes_remain()));
 	}
 
-	if ($s->checkReceive()) {
+	if ($s->{rtmp}->checkReceive()) {
 		$s->{break} = 1;
 	}
 }
@@ -199,7 +202,7 @@ sub sendFrame {
 			last;
 		}
 
-		if ($s->checkReceive()) {
+		if ($s->{rtmp}->checkReceive()) {
 			$s->{break} = 1;
 			last;
 		}
@@ -207,13 +210,6 @@ sub sendFrame {
 		my $frame = shift @{$s->{frames}};
 		$s->{writer}->send($frame);
 	}
-}
-
-sub checkReceive {
-	my($s) = @_;
-	my $fileno = fileno($s->{rtmp}->{sock});
-	my $rin = pack('C', 1 << $fileno);
-	return select($rin, undef, undef, 0);
 }
 
 1;

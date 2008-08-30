@@ -23,6 +23,17 @@ sub new {
 	return $s;
 }
 
+sub bytes {
+	my($s) = @_;
+	$s->{handle} = $s->{ts}->{handle};
+
+	my $bytes = sysseek($s->{handle}, 0, SEEK_END);
+
+	sysseek($s->{handle}, 0, SEEK_SET);
+
+	return $bytes;
+}
+
 sub duration {
 	my($s) = @_;
 	$s->{handle} = $s->{ts}->{handle};
@@ -62,15 +73,15 @@ sub pts {
 }
 
 sub pmt {
-	my($s, $ts) = @_;
-	$s->SUPER::pmt($ts);
+	my($s, $ts, $buffer) = @_;
+	$s->SUPER::pmt($ts, $buffer);
 	$s->{break} = 1;
 }
 
 sub video {
-	my($s, $ts) = @_;
+	my($s, $ts, $buffer) = @_;
 
-	my $pes = $s->parsePES($ts);
+	my $pes = $s->parsePES($buffer);
 
 	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
 		$s->{_pts} = $pes->{pts};
@@ -78,6 +89,14 @@ sub video {
 		if ($s->{_first}) {
 			$s->{break} = 1;
 		}
+	}
+}
+
+sub payload {
+	my($s, $ts, $buffer) = @_;
+
+	if ($s->{ts}->{rtmp}->checkReceive()) {
+		$s->{break} = 1;
 	}
 }
 

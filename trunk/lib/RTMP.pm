@@ -169,4 +169,11 @@ sub send {
 	}
 }
 
+sub checkReceive {
+	my($s) = @_;
+	my $fileno = fileno($s->{sock});
+	my $rin = pack('C', 1 << $fileno);
+	return select($rin, undef, undef, 0);
+}
+
 1;

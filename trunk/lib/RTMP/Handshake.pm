@@ -149,30 +149,24 @@ sub execute {
 sub clientToServer {
 	my($s) = @_;
 
-	my $buffer = $s->{rtmp}->{buffer}->clone();
+	$s->{rtmp}->{buffer}->getBytes(1);
 
-	$buffer->getBytes(1);
-
-	my $client = $buffer->getBytes(HANDSHAKE_SIZE);
+	my $client = $s->{rtmp}->{buffer}->getBytes(HANDSHAKE_SIZE);
 	my $server = $s->getHandshake($client);
 	my $put = "\x03" . HANDSHAKE_SERVER . $server;
 	$s->{rtmp}->send($put);
 
-	$s->{rtmp}->{buffer}->{pos} = $buffer->{pos};
 	$s->{phase} = HANDSHAKE_SERVER_TO_CLIENT;
 }
 
 sub serverToClient {
 	my($s) = @_;
 
-	my $buffer = $s->{rtmp}->{buffer}->clone();
-
-	my $server = $buffer->getBytes(HANDSHAKE_SIZE);
+	my $server = $s->{rtmp}->{buffer}->getBytes(HANDSHAKE_SIZE);
 
 	$s->{rtmp}->{method}->serverBandwidth();
 	$s->{rtmp}->{method}->clientBandwidth();
 
-	$s->{rtmp}->{buffer}->{pos} = $buffer->{pos};
 	$s->{phase} = HANDSHAKE_COMPLETE;
 	warn "[rtmp] handshake\n";
 }
