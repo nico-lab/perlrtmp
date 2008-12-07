@@ -4,7 +4,6 @@ use strict;
 use Scalar::Util qw(weaken);
 use base qw(TS::File);
 use Fcntl;
-use IO::Seekable;
 use TS::Header;
 use TS::Writer;
 use TS::H264;
@@ -23,8 +22,7 @@ sub new {
 	$s->{writer} = TS::Writer->new($s);
 	$s->{header} = TS::Header->new($s);
 	$s->{pes_buffer} = TS::PESBuffer->new();
-	$s->{duration} = 0;
-	$s->{bytes} = 0;
+	$s->{handle} = undef;
 	$s->{pause} = 0;
 	$s->reset();
 	weaken($s->{rtmp});
@@ -43,9 +41,38 @@ sub reset {
 
 sub open {
 	my($s, $file) = @_;
-	$s->SUPER::open($file);
-	$s->{bytes} = $s->{header}->bytes();
-	$s->{duration} = $s->{header}->duration();
+	my $opt = O_RDONLY | O_BINARY;
+
+	eval {
+		$opt |= O_LARGEFILE;
+	};
+
+	if ($@) {
+		warn "[NOTICE] not defined O_LARGEFILE\n";
+	}
+
+	sysopen($s->{handle}, $file, $opt);
+	$s->{header}->execute();
+}
+
+sub fileSeek {
+	my($s) = @_;
+	return seek($s->{handle}, $_[1], $_[2]);
+}
+
+sub fileRead {
+	my($s) = @_;
+	return read($s->{handle}, $_[1], $_[2]);
+}
+
+sub fileTell {
+	my($s) = @_;
+	return tell($s->{handle});
+}
+
+sub close {
+	my($s) = @_;
+	close($s->{handle});
 }
 
 sub seek {
@@ -54,21 +81,14 @@ sub seek {
 	$s->reset();
 	$s->{writer}->reset(1);
 
-	if (0 < $s->{duration}) {
-		my $seek = $s->{bytes} * ($time / 1000 / $s->{duration});
-		sysseek($s->{handle}, $seek, SEEK_SET);
-	}
-
-	my $current = $s->{header}->current();
-
-	return $current * 1000;
+	return $s->{header}->seek($time);
 }
 
 sub pause {
 	my($s, $flag) = @_;
 	$s->{pause} = $flag;
 
-	if (!$flag) {
+	if (!$flag && $s->{start_pts}) {
 		$s->{start_pts} = $s->{frames}->[0]->{pts};
 		$s->{start_time} = time() + BUFFER_LENGTH;
 	}
@@ -77,7 +97,6 @@ sub pause {
 sub complete {
 	my($s) = @_;
 	$s->{play} = 0;
-	$s->{writer}->playStatus();
 	$s->{rtmp}->complete();
 }
 
@@ -87,6 +106,11 @@ sub execute {
 	if ($s->{play} && !$s->{pause}) {
 		$s->parse();
 	}
+}
+
+sub read {
+	my($s) = @_;
+	return $s->fileRead($_[1], $_[2]);
 }
 
 sub video {

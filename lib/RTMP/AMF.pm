@@ -11,6 +11,7 @@ use constant AMF_UNDEF => 6;
 use constant AMF_ASSOC_ARRAY => 8;
 use constant AMF_END => 9;
 use constant AMF_LONG_STRING => 12;
+use constant LITTLE_ENDIAN => pack('I', 1) =~ /^\x01/;
 
 sub new {
 	my($pkg, $buf) = @_;
@@ -71,13 +72,18 @@ sub getNumber {
 	my($s) = @_;
 
 	my $bytes = $s->{buffer}->getBytes(8);
-	my $buf = '';
 
-	for (my $i = length($bytes) - 1; 0 <= $i; $i--) {
-		$buf .= substr($bytes, $i, 1);
+	if (LITTLE_ENDIAN) {
+		my $buf = '';
+
+		for (my $i = length($bytes) - 1; 0 <= $i; $i--) {
+			$buf .= substr($bytes, $i, 1);
+		}
+
+		return unpack('d', $buf);
 	}
 
-	return unpack('d', $buf);
+	return unpack('d', $bytes);
 }
 
 sub getBoolean {
@@ -184,8 +190,12 @@ sub setNumber {
 	$s->{buffer}->setInt(AMF_NUMBER);
 	my $bytes = pack('d', $data);
 
-	for (my $i = length($bytes) - 1; 0 <= $i; $i--) {
-		$s->{buffer}->setBytes(substr($bytes, $i, 1));
+	if (LITTLE_ENDIAN) {
+		for (my $i = length($bytes) - 1; 0 <= $i; $i--) {
+			$s->{buffer}->setBytes(substr($bytes, $i, 1));
+		}
+	} else {
+		$s->{buffer}->setBytes($bytes);
 	}
 }
 

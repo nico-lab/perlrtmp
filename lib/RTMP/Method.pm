@@ -60,7 +60,7 @@ sub connect {
 			key => 'fmsVer',
 			value => {
 				type => RTMP::AMF::AMF_STRING,
-				data => 'perlRTMP/1,0,0,7',
+				data => 'perlRTMP/1,0,1,0',
 			},
 		},
 	];
@@ -420,6 +420,48 @@ sub playStop {
 	my $frame = $type << 6 | 5;
 	my $timer = 0;
 	my $data_type = 20;
+	my $obj = 0x01000000;
+	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
+
+	$s->{rtmp}->{serializer}->send($packet);
+}
+
+sub playStatus {
+	my($s, $type) = @_;
+
+	my $option = [
+		{
+			key => 'code',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'NetStream.Play.Complete',
+			},
+		},
+		{
+			key => 'level',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'status',
+			},
+		},
+	];
+
+	my @dump = (
+		{
+			type => RTMP::AMF::AMF_STRING,
+			data => 'onPlayStatus',
+		},
+		{
+			type => RTMP::AMF::AMF_HASH,
+			data => $option,
+		},
+	);
+
+	my $data = RTMP::AMF::dumpArray(@dump);
+
+	my $frame = $type << 6 | 5;
+	my $timer = 0;
+	my $data_type = 18;
 	my $obj = 0x01000000;
 	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
 
