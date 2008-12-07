@@ -7,6 +7,8 @@ use RTMP::Serializer;
 use RTMP::Method;
 use RTMP::AMF;
 use TS;
+use MP4;
+use OneSeg24;
 use Binary;
 
 sub new {
@@ -80,14 +82,37 @@ sub receive {
 sub play {
 	my($s, $file) = @_;
 
-	my $path = $s->{dir} . '/' . $file;
-
-	if (!-f $path) {
-		warn "[ERROR] file not found: $path\n";
+	if ($file =~ s/^mp4://) {
+		if ($file !~ /\.mp4$/) {
+			$file .= '.mp4';
+		}
 	}
 
-	$s->{file} = TS->new($s);
-	$s->{file}->open($path);
+	if ($file =~ /^\d{6}-\d{6}(?:-\d{6})?-\d{2}/) {
+		$s->{file} = OneSeg24->new($s);
+
+		if (!$s->{file}->open($file)) {
+			$s->{file} = undef;
+			return;
+		}
+	} else {
+		my $path = $s->{dir} . '/' . $file;
+
+		if (!-f $path) {
+			warn "[ERROR] file not found: $path\n";
+			return;
+		}
+
+		if ($file =~ /\.ts$/) {
+			$s->{file} = TS->new($s);
+		}
+
+		if ($file =~ /\.mp4$/) {
+			$s->{file} = MP4->new($s);
+		}
+
+		$s->{file}->open($path);
+	}
 
 	$s->{serializer}->setChankSize(RTMP::Serializer::PLAY_CHANK_SIZE);
 	$s->{serializer}->setChankMarker(RTMP::Serializer::PLAY_CHANK_MARKER);
@@ -137,6 +162,7 @@ sub pause {
 sub complete {
 	my($s) = @_;
 
+	$s->{method}->playStatus(1);
 	$s->{method}->commandCCC();
 	$s->{method}->playStop(1);
 }

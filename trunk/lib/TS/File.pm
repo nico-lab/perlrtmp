@@ -1,7 +1,6 @@
 package TS::File;
 
 use strict;
-use Fcntl;
 use Binary;
 
 use constant PACKET_SIZE => 188;
@@ -15,7 +14,6 @@ sub new {
 	my($pkg) = @_;
 
 	my $hash = {
-		handle => undef,
 		video_pid => undef,
 		audio_pid => undef,
 		break => 0,
@@ -26,39 +24,19 @@ sub new {
 	return $s;
 }
 
-sub open {
-	my($s, $file) = @_;
-	my $opt = O_RDONLY | O_BINARY;
-
-	eval {
-		$opt |= O_LARGEFILE;
-	};
-
-	if ($@) {
-		warn "[NOTICE] not defined O_LARGEFILE\n";
-	}
-
-	sysopen($s->{handle}, $file, $opt);
-}
-
-sub close {
-	my($s) = @_;
-	close($s->{handle});
-}
-
 sub parse {
 	my($s) = @_;
 
 	$s->{break} = 0;
 	my $packet_size = 1;
 
-	while(!$s->{break} && sysread($s->{handle}, my $buf, $packet_size)) {
+	while(!$s->{break} && $s->read(my $buf, $packet_size)) {
 		my $sync_byte = vec($buf, 0, 8);
 
 		if ($sync_byte == SYNC_BYTE) {
 			$packet_size = PACKET_SIZE;
 
-			while(length($buf) < PACKET_SIZE && sysread($s->{handle}, my $add, 1)) {
+			while(length($buf) < PACKET_SIZE && $s->read(my $add, 1)) {
 				$buf .= $add;
 			}
 		} else {
@@ -93,6 +71,11 @@ sub parse {
 	if (!$s->{break}) {
 		$s->complete();
 	}
+}
+
+sub read {
+	my($s) = @_;
+	return 0;
 }
 
 sub pmt {

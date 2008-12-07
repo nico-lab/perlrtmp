@@ -90,8 +90,9 @@ sub parse {
 				$keyframe = 1;
 			}
 
-			$put->setLong($length);
-			$put->setBytes($buf);
+			# for PS3
+			# $put->setLong($length);
+			# $put->setBytes($buf);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_SEI) {
 			$put->setLong($length);
 			$put->setBytes($buf);

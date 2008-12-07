@@ -14,6 +14,8 @@ sub new {
 	my $s = $pkg->SUPER::new();
 
 	$s->{ts} = $ts;
+	$s->{bytes} = 0;
+	$s->{duration} = 0;
 	$s->{_first_pts} = undef;
 	$s->{_last_pts} = undef;
 	$s->{_pts} = undef;
@@ -23,40 +25,46 @@ sub new {
 	return $s;
 }
 
-sub bytes {
+sub execute {
 	my($s) = @_;
-	$s->{handle} = $s->{ts}->{handle};
-
-	my $bytes = sysseek($s->{handle}, 0, SEEK_END);
-
-	sysseek($s->{handle}, 0, SEEK_SET);
-
-	return $bytes;
-}
-
-sub duration {
-	my($s) = @_;
-	$s->{handle} = $s->{ts}->{handle};
 
 	$s->parse();
 	$s->{ts}->{video_pid} = $s->{video_pid};
 	$s->{ts}->{audio_pid} = $s->{audio_pid};
 
-	sysseek($s->{handle}, 0, SEEK_SET);
+	$s->{ts}->fileSeek(0, SEEK_SET);
 	$s->{_first_pts} = $s->pts(1);
 
-	sysseek($s->{handle}, SCAN_FILE_END, SEEK_END);
+	$s->{ts}->fileSeek(SCAN_FILE_END, SEEK_END);
 	$s->{_last_pts} = $s->pts(0);
 
-	sysseek($s->{handle}, 0, SEEK_SET);
-
 	my $pts_length = TS::PTS::length($s->{_last_pts}, $s->{_first_pts});
-	return $pts_length / 90000;
+	$s->{duration} = $pts_length / 90000;
+
+	$s->{ts}->fileSeek(0, SEEK_END);
+	$s->{bytes} = $s->{ts}->fileTell();
+
+	$s->{ts}->fileSeek(0, SEEK_SET);
+}
+
+sub read {
+	my($s) = @_;
+	return $s->{ts}->fileRead($_[1], $_[2]);
+}
+
+sub seek {
+	my($s, $time) = @_;
+
+	if (0 < $s->{duration}) {
+		my $seek = int($s->{bytes} * ($time / 1000 / $s->{duration}));
+		$s->{ts}->fileSeek($seek, SEEK_SET);
+	}
+
+	return $s->current() * 1000;
 }
 
 sub current {
 	my($s) = @_;
-	$s->{handle} = $s->{ts}->{handle};
 
 	my $current_pts = $s->pts(1);
 
