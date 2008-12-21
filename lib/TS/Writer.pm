@@ -164,7 +164,7 @@ sub metadata {
 			key => 'duration',
 			value => {
 				type => RTMP::AMF::AMF_NUMBER,
-				data => $s->{ts}->{header}->{duration},
+				data => $s->{ts}->{duration},
 			},
 		},
 		{
@@ -191,6 +191,48 @@ sub metadata {
 		{
 			type => RTMP::AMF::AMF_ASSOC_ARRAY,
 			data => $args,
+		},
+	);
+
+	my $data = RTMP::AMF::dumpArray(@dump);
+
+	my $frame = $s->{type} << 6 | 5;
+	my $timer = 0;
+	my $data_type = 18;
+	my $obj = 0x01000000;
+	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
+
+	$s->{ts}->{rtmp}->{serializer}->send($packet);
+}
+
+sub playStatus {
+	my($s) = @_;
+
+	my $option = [
+		{
+			key => 'code',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'NetStream.Play.Complete',
+			},
+		},
+		{
+			key => 'level',
+			value => {
+				type => RTMP::AMF::AMF_STRING,
+				data => 'status',
+			},
+		},
+	];
+
+	my @dump = (
+		{
+			type => RTMP::AMF::AMF_STRING,
+			data => 'onPlayStatus',
+		},
+		{
+			type => RTMP::AMF::AMF_HASH,
+			data => $option,
 		},
 	);
 

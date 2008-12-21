@@ -21,7 +21,7 @@ my $sel = new IO::Select($lsn);
 my $session = {};
 
 while (1) {
-	for my $sock ($sel->can_read(1)) {
+	for my $sock ($sel->can_read(5)) {
 		if ($sock == $lsn) {
 			my $new = $lsn->accept;
 			$sel->add($new);

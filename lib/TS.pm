@@ -4,6 +4,7 @@ use strict;
 use Scalar::Util qw(weaken);
 use base qw(TS::File);
 use Fcntl;
+use IO::Seekable;
 use TS::Header;
 use TS::Writer;
 use TS::H264;
@@ -22,7 +23,7 @@ sub new {
 	$s->{writer} = TS::Writer->new($s);
 	$s->{header} = TS::Header->new($s);
 	$s->{pes_buffer} = TS::PESBuffer->new();
-	$s->{handle} = undef;
+	$s->{duration} = 0;
 	$s->{pause} = 0;
 	$s->reset();
 	weaken($s->{rtmp});
@@ -41,38 +42,8 @@ sub reset {
 
 sub open {
 	my($s, $file) = @_;
-	my $opt = O_RDONLY | O_BINARY;
-
-	eval {
-		$opt |= O_LARGEFILE;
-	};
-
-	if ($@) {
-		warn "[NOTICE] not defined O_LARGEFILE\n";
-	}
-
-	sysopen($s->{handle}, $file, $opt);
-	$s->{header}->execute();
-}
-
-sub fileSeek {
-	my($s) = @_;
-	return seek($s->{handle}, $_[1], $_[2]);
-}
-
-sub fileRead {
-	my($s) = @_;
-	return read($s->{handle}, $_[1], $_[2]);
-}
-
-sub fileTell {
-	my($s) = @_;
-	return tell($s->{handle});
-}
-
-sub close {
-	my($s) = @_;
-	close($s->{handle});
+	$s->SUPER::open($file);
+	$s->{duration} = $s->{header}->duration();
 }
 
 sub seek {
@@ -81,14 +52,20 @@ sub seek {
 	$s->reset();
 	$s->{writer}->reset(1);
 
-	return $s->{header}->seek($time);
+	my $end = sysseek($s->{handle}, 0, SEEK_END);
+	my $seek = $end * (($time / 1000) / $s->{duration});
+	sysseek($s->{handle}, $seek, SEEK_SET);
+
+	my $current = $s->{header}->current();
+
+	return $current * 1000;
 }
 
 sub pause {
 	my($s, $flag) = @_;
 	$s->{pause} = $flag;
 
-	if (!$flag && $s->{start_pts}) {
+	if (!$flag) {
 		$s->{start_pts} = $s->{frames}->[0]->{pts};
 		$s->{start_time} = time() + BUFFER_LENGTH;
 	}
@@ -97,6 +74,7 @@ sub pause {
 sub complete {
 	my($s) = @_;
 	$s->{play} = 0;
+	$s->{writer}->playStatus();
 	$s->{rtmp}->complete();
 }
 
@@ -108,23 +86,18 @@ sub execute {
 	}
 }
 
-sub read {
-	my($s) = @_;
-	return $s->fileRead($_[1], $_[2]);
-}
-
 sub video {
-	my($s, $ts, $buffer) = @_;
+	my($s, $ts) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
-	my $pes = $s->parsePES($buffer);
+	my $pes = $s->parsePES($ts);
 
 	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
 		if (defined $b->{pts}) {
-			my $p = TS::H264->new($b->{buffer});
-			$b->{buffer}->slide();
+			my $p = TS::H264->new($b->{buf});
+			$b->{buf} = substr($b->{buf}, $p->{pos});
 			$s->parsePayload($ts, $b, $pes, $p);
 		}
 
@@ -134,17 +107,17 @@ sub video {
 }
 
 sub audio {
-	my($s, $ts, $buffer) = @_;
+	my($s, $ts) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	$b->{buffering} = 1;
-	my $pes = $s->parsePES($buffer);
+	my $pes = $s->parsePES($ts);
 
 	if ($pes->{packet_start_code_prefix} == TS::File::PES_START_CODE) {
 		if (defined $b->{pts}) {
-			my $p = TS::AAC->new($b->{buffer});
-			$b->{buffer}->slide();
+			my $p = TS::AAC->new($b->{buf});
+			$b->{buf} = substr($b->{buf}, $p->{pos});
 			$s->parsePayload($ts, $b, $pes, $p);
 		}
 
@@ -154,15 +127,15 @@ sub audio {
 }
 
 sub payload {
-	my($s, $ts, $buffer) = @_;
+	my($s, $ts) = @_;
 
 	my $b = $s->{pes_buffer}->getPES($ts->{pid});
 
 	if ($b->{buffering}) {
-		$b->{buffer}->append($buffer->getBytes($buffer->bytes_remain()));
+		$b->{buf} .= $ts->{payload};
 	}
 
-	if ($s->{rtmp}->checkReceive()) {
+	if ($s->checkReceive()) {
 		$s->{break} = 1;
 	}
 }
@@ -226,7 +199,7 @@ sub sendFrame {
 			last;
 		}
 
-		if ($s->{rtmp}->checkReceive()) {
+		if ($s->checkReceive()) {
 			$s->{break} = 1;
 			last;
 		}
@@ -234,6 +207,13 @@ sub sendFrame {
 		my $frame = shift @{$s->{frames}};
 		$s->{writer}->send($frame);
 	}
+}
+
+sub checkReceive {
+	my($s) = @_;
+	my $fileno = fileno($s->{rtmp}->{sock});
+	my $rin = pack('C', 1 << $fileno);
+	return select($rin, undef, undef, 0);
 }
 
 1;
