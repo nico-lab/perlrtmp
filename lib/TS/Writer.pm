@@ -164,7 +164,7 @@ sub metadata {
 			key => 'duration',
 			value => {
 				type => RTMP::AMF::AMF_NUMBER,
-				data => $s->{ts}->{header}->{duration},
+				data => $s->{ts}->{duration},
 			},
 		},
 		{
@@ -203,6 +203,7 @@ sub metadata {
 	my $packet = RTMP::Packet->new($frame,$timer,$data,$data_type,$obj);
 
 	$s->{ts}->{rtmp}->{serializer}->send($packet);
+
 }
 
 1;

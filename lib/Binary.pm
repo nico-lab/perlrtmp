@@ -21,12 +21,7 @@ sub new {
 sub append {
 	my($s, $buf) = @_;
 	$s->{buf} .= $buf;
-	$s->{length} += length($buf);
-}
-
-sub bytes_remain {
-	my($s) = @_;
-	return $s->{length} - $s->{pos};
+	$s->{length} = length($s->{buf});
 }
 
 sub getBytes {
@@ -67,7 +62,8 @@ sub getLong {
 
 sub setBytes {
 	my($s, $data) = @_;
-	$s->append($data);
+	$s->{buf} .= $data;
+	$s->{pos} += length($data);
 }
 
 sub setInt {
@@ -94,7 +90,7 @@ sub slide {
 	my($s) = @_;
 
 	$s->{buf} = substr($s->{buf}, $s->{pos});
-	$s->{length} -= $s->{pos};
+	$s->{length} = length($s->{buf});
 	$s->{pos} = 0;
 }
 

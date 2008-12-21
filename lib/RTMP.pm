@@ -7,8 +7,6 @@ use RTMP::Serializer;
 use RTMP::Method;
 use RTMP::AMF;
 use TS;
-use MP4;
-use OneSeg24;
 use Binary;
 
 sub new {
@@ -63,9 +61,6 @@ sub receive {
 			} elsif ($method eq 'seek') {
 				$s->seek($option);
 				warn "[rtmp] seek $option\n";
-			} elsif ($method eq 'pause') {
-				$s->pause($option);
-				warn "[rtmp] pause $option\n";
 			} elsif ($method eq 'closeStream') {
 				warn "[rtmp] closeStream\n";
 			} elsif ($method eq 'deleteStream') {
@@ -82,37 +77,14 @@ sub receive {
 sub play {
 	my($s, $file) = @_;
 
-	if ($file =~ s/^mp4://) {
-		if ($file !~ /\.mp4$/) {
-			$file .= '.mp4';
-		}
+	my $path = $s->{dir} . '/' . $file;
+
+	if (!-f $path) {
+		warn "[ERROR] file not found: $path\n";
 	}
 
-	if ($file =~ /^\d{6}-\d{6}(?:-\d{6})?-\d{2}/) {
-		$s->{file} = OneSeg24->new($s);
-
-		if (!$s->{file}->open($file)) {
-			$s->{file} = undef;
-			return;
-		}
-	} else {
-		my $path = $s->{dir} . '/' . $file;
-
-		if (!-f $path) {
-			warn "[ERROR] file not found: $path\n";
-			return;
-		}
-
-		if ($file =~ /\.ts$/) {
-			$s->{file} = TS->new($s);
-		}
-
-		if ($file =~ /\.mp4$/) {
-			$s->{file} = MP4->new($s);
-		}
-
-		$s->{file}->open($path);
-	}
+	$s->{file} = TS->new($s);
+	$s->{file}->open($path);
 
 	$s->{serializer}->setChankSize(RTMP::Serializer::PLAY_CHANK_SIZE);
 	$s->{serializer}->setChankMarker(RTMP::Serializer::PLAY_CHANK_MARKER);
@@ -137,34 +109,6 @@ sub seek {
 	$s->{method}->commandBBB();
 	$s->{method}->seekNotify($time);
 	$s->{method}->playStart(1);
-}
-
-sub pause {
-	my($s, $flag) = @_;
-
-	if ($flag) {
-		$s->{file}->pause($flag);
-
-		$s->{method}->commandCCC();
-		$s->{method}->pauseNotify(1);
-	} else {
-		$s->{serializer}->setChankSize(RTMP::Serializer::PLAY_CHANK_SIZE);
-		$s->{serializer}->setChankMarker(RTMP::Serializer::PLAY_CHANK_MARKER);
-
-		$s->{method}->setChankSize();
-		$s->{method}->commandAAA();
-		$s->{method}->commandBBB();
-
-		$s->{file}->pause($flag);
-	}
-}
-
-sub complete {
-	my($s) = @_;
-
-	$s->{method}->playStatus(1);
-	$s->{method}->commandCCC();
-	$s->{method}->playStop(1);
 }
 
 sub execute {
@@ -193,13 +137,6 @@ sub send {
 		print $sock $buf;
 		$sock->flush();
 	}
-}
-
-sub checkReceive {
-	my($s) = @_;
-	my $fileno = fileno($s->{sock});
-	my $rin = pack('C', 1 << $fileno);
-	return select($rin, undef, undef, 0);
 }
 
 1;

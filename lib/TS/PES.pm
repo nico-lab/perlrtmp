@@ -9,12 +9,10 @@ sub new {
 		pts => undef,
 		start => 0,
 		buffering => 0,
-		buffer => undef,
+		buf => '',
 	};
 
 	my $s = bless $hash, $pkg;
-
-	$s->{buffer} = Binary->new();
 
 	return $s;
 }
