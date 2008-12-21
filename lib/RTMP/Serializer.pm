@@ -1,7 +1,6 @@
 package RTMP::Serializer;
 
 use strict;
-use Scalar::Util qw(weaken);
 use RTMP::Packet;
 use RTMP::FrameBuffer;
 
@@ -22,7 +21,6 @@ sub new {
 	my $s = bless $hash, $pkg;
 
 	$s->{frame_buffer} = RTMP::FrameBuffer->new();
-	weaken($s->{rtmp});
 
 	return $s;
 }
@@ -58,27 +56,17 @@ sub serialize {
 		$put->setShort($frame_number);
 	}
 
-	my $timer = $packet->{timer};
-
-	if (0xFFFFFF <= $packet->{timer}) {
-		$timer = 0xFFFFFF;
-	}
-
 	if ($packet_type == 0) {
-		$put->setMedium($timer);
+		$put->setMedium($packet->{timer});
 		$put->setMedium($buffer->{length});
 		$put->setInt($packet->{data_type});
 		$put->setLong($packet->{obj});
 	} elsif ($packet_type == 1) {
-		$put->setMedium($timer);
+		$put->setMedium($packet->{timer});
 		$put->setMedium($buffer->{length});
 		$put->setInt($packet->{data_type});
 	} elsif ($packet_type == 2) {
-		$put->setMedium($timer);
-	}
-
-	if (0xFFFFFF <= $packet->{timer}) {
-		$put->setLong($packet->{timer});
+		$put->setMedium($packet->{timer});
 	}
 
 	my $len = $buffer->{length};
@@ -105,14 +93,16 @@ sub receive {
 sub deserialize {
 	my($s) = @_;
 
-	my $first_number = $s->{rtmp}->{buffer}->getInt();
+	my $buffer = $s->{rtmp}->{buffer}->clone();
+
+	my $first_number = $buffer->getInt();
 	my $packet_type = $first_number >> 6;
 	my $frame_number = $first_number & 0x3F;
 
 	if ($frame_number == 0) {
-		$frame_number = $s->{rtmp}->{buffer}->getInt();
+		$frame_number = $buffer->getInt();
 	} elsif ($frame_number == 1) {
-		$frame_number = $s->{rtmp}->{buffer}->getShort();
+		$frame_number = $buffer->getShort();
 	}
 
 	if (!$s->{frame_buffer}->exists($frame_number)) {
@@ -124,16 +114,16 @@ sub deserialize {
 	my $frame = $s->{frame_buffer}->getFrame($frame_number);
 
 	if ($packet_type == 0) {
-		$frame->{timer} = $s->{rtmp}->{buffer}->getMedium();
-		$frame->{size} = $s->{rtmp}->{buffer}->getMedium();
-		$frame->{data_type} = $s->{rtmp}->{buffer}->getInt();
-		$frame->{obj} = $s->{rtmp}->{buffer}->getLong();
+		$frame->{timer} = $buffer->getMedium();
+		$frame->{size} = $buffer->getMedium();
+		$frame->{data_type} = $buffer->getInt();
+		$frame->{obj} = $buffer->getLong();
 	} elsif ($packet_type == 1) {
-		$frame->{timer} = $s->{rtmp}->{buffer}->getMedium();
-		$frame->{size} = $s->{rtmp}->{buffer}->getMedium();
-		$frame->{data_type} = $s->{rtmp}->{buffer}->getInt();
+		$frame->{timer} = $buffer->getMedium();
+		$frame->{size} = $buffer->getMedium();
+		$frame->{data_type} = $buffer->getInt();
 	} elsif ($packet_type == 2) {
-		$frame->{timer} = $s->{rtmp}->{buffer}->getMedium();
+		$frame->{timer} = $buffer->getMedium();
 	}
 
 	my $put = Binary->new();
@@ -142,13 +132,15 @@ sub deserialize {
 	while($len > 0) {
 		my $r = $s->min($len, $s->{chank_size});
 
-		$put->setBytes($s->{rtmp}->{buffer}->getBytes($r));
+		$put->setBytes($buffer->getBytes($r));
 		$len -= $r;
 
 		if ($len > 0) {
-			$s->{rtmp}->{buffer}->getBytes(1);
+			$buffer->getBytes(1);
 		}
 	}
+
+	$s->{rtmp}->{buffer}->{pos} = $buffer->{pos};
 
 	return RTMP::Packet->new($frame_number,$frame->{timer},$put->{buf},$frame->{data_type},$frame->{obj});
 }

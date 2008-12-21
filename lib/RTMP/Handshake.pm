@@ -1,7 +1,6 @@
 package RTMP::Handshake;
 
 use strict;
-use Scalar::Util qw(weaken);
 use Digest::SHA qw(hmac_sha256);
 
 use constant HANDSHAKE_CLIENT_TO_SERVER => 0;
@@ -126,8 +125,6 @@ sub new {
 
 	my $s = bless $hash, $pkg;
 
-	weaken($s->{rtmp});
-
 	return $s;
 }
 
@@ -149,24 +146,30 @@ sub execute {
 sub clientToServer {
 	my($s) = @_;
 
-	$s->{rtmp}->{buffer}->getBytes(1);
+	my $buffer = $s->{rtmp}->{buffer}->clone();
 
-	my $client = $s->{rtmp}->{buffer}->getBytes(HANDSHAKE_SIZE);
+	$buffer->getBytes(1);
+
+	my $client = $buffer->getBytes(HANDSHAKE_SIZE);
 	my $server = $s->getHandshake($client);
 	my $put = "\x03" . HANDSHAKE_SERVER . $server;
 	$s->{rtmp}->send($put);
 
+	$s->{rtmp}->{buffer}->{pos} = $buffer->{pos};
 	$s->{phase} = HANDSHAKE_SERVER_TO_CLIENT;
 }
 
 sub serverToClient {
 	my($s) = @_;
 
-	my $server = $s->{rtmp}->{buffer}->getBytes(HANDSHAKE_SIZE);
+	my $buffer = $s->{rtmp}->{buffer}->clone();
+
+	my $server = $buffer->getBytes(HANDSHAKE_SIZE);
 
 	$s->{rtmp}->{method}->serverBandwidth();
 	$s->{rtmp}->{method}->clientBandwidth();
 
+	$s->{rtmp}->{buffer}->{pos} = $buffer->{pos};
 	$s->{phase} = HANDSHAKE_COMPLETE;
 	warn "[rtmp] handshake\n";
 }
