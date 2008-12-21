@@ -2,11 +2,10 @@ package TS::H264;
 
 use strict;
 use BitStream;
-use Scalar::Util qw(weaken);
 
 use constant H264_START_CODE_LENGTH => 4;
-use constant H264_START_CODE => pack('H*', '00000001');
-use constant H264_PREVENT_3_BYTE => pack('H*', '000003');
+use constant H264_START_CODE => 0x000001;
+use constant H264_PREVENT_3_BYTE => 0x000003;
 use constant H264_NAL_TYPE_NON_IDR_SLICE => 0x01;
 use constant H264_NAL_TYPE_IDR_SLICE => 0x05;
 use constant H264_NAL_TYPE_SEI => 0x06;
@@ -35,16 +34,16 @@ use constant EXP_GOLOMB_BITS => [
 ];
 
 sub new {
-	my($pkg, $buffer) = @_;
+	my($pkg, $buf) = @_;
 
 	my $hash = {
-		buffer => $buffer,
+		buf => $buf,
+		pos => 0,
 		frames => [],
 	};
 
 	my $s = bless $hash, $pkg;
 
-	weaken($s->{buffer});
 	$s->parse();
 
 	return $s;
@@ -56,25 +55,22 @@ sub parse {
 	my $seq_param = '';
 	my $pic_param = '';
 	my $keyframe = 0;
-	my $put = Binary->new();
+	my $buf = '';
 
-	while($s->{buffer}->{pos} < $s->{buffer}->{length}) {
+	while($s->{pos} < length($s->{buf})) {
 
-		my $buffer = $s->{buffer}->clone();
+		my $find = $s->find_start_code($s->{pos});
+		my $pos = $find + H264_START_CODE_LENGTH;
 
-		my $find = $s->find_start_code($buffer);
-		$buffer->{pos} = $find + H264_START_CODE_LENGTH;
+		my $next = $s->find_start_code($pos);
 
-		my $next = $s->find_start_code($buffer);
-
-		if ($next == -1) {
-			$next = $buffer->{length};
+		if (!defined $next) {
+			$next = length($s->{buf});
 		}
 
-		my $length = $next - $buffer->{pos};
-		my $buf = $buffer->getBytes($length);
+		my $length = $next - $pos;
 
-		my $a = vec($buf, 0, 8);
+		my $a = vec($s->{buf}, $pos, 8);
 		my $nal_unit_type = $a & 0x1F;
 
 		if ($nal_unit_type == H264_NAL_TYPE_ACCESS_UNIT) {
@@ -82,48 +78,65 @@ sub parse {
 			$seq_param = '';
 			$pic_param = '';
 			$keyframe = 0;
-			$put = Binary->new();
+			$buf = '';
 
-			my $a = vec($buf, 1, 8);
+			my $a = vec($s->{buf}, $pos + 1, 8);
 
 			if (($a & 0x20) == 0) {
 				$keyframe = 1;
 			}
 
-			# for PS3
-			# $put->setLong($length);
-			# $put->setBytes($buf);
+			$buf .= pack('N', $length);
+			$buf .= substr($s->{buf}, $pos, $length);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_SEI) {
-			$put->setLong($length);
-			$put->setBytes($buf);
+			$buf .= pack('N', $length);
+			$buf .= substr($s->{buf}, $pos, $length);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_NON_IDR_SLICE || $nal_unit_type == H264_NAL_TYPE_IDR_SLICE) {
-			$put->setLong($length);
-			$put->setBytes($buf);
+			$buf .= pack('N', $length);
+			$buf .= substr($s->{buf}, $pos, $length);
 
 			my $frame = {
 				seq_param => $seq_param,
 				pic_param => $pic_param,
 				keyframe => $keyframe,
-				buf => $put->{buf},
+				buf => $buf,
 			};
 
 			push(@{$s->{frames}}, $frame);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_SEQ_PARAM) {
-			$seq_param = $buf;
+			$seq_param = substr($s->{buf}, $pos, $length);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_PIC_PARAM) {
-			$pic_param = $buf;
+			$pic_param = substr($s->{buf}, $pos, $length);
 		} elsif ($nal_unit_type == H264_NAL_TYPE_FILLER_DATA) {
 		} else {
 			warn "[NOTICE] no support nal unit type: $nal_unit_type\n";
 		}
 
-		$s->{buffer}->{pos} = $buffer->{pos};
+		$s->{pos} = $next;
 	}
 }
 
 sub find_start_code {
-	my($s, $buffer) = @_;
-	return index($buffer->{buf}, H264_START_CODE, $buffer->{pos});
+	my($s, $pos) = @_;
+
+	while($pos + H264_START_CODE_LENGTH < length($s->{buf})) {
+
+#		my $prevent_code = unpack('N', "\x00" . substr($s->{buf}, $pos, 3));
+#
+#		if ($prevent_code == H264_PREVENT_3_BYTE) {
+#			$s->{buf} = substr($s->{buf}, 0, $pos + 2) . substr($s->{buf}, $pos + 3);
+#		}
+
+		my $start_code = unpack('N', substr($s->{buf}, $pos, H264_START_CODE_LENGTH));
+
+		if ($start_code == H264_START_CODE) {
+			return $pos;
+		}
+
+		$pos++;
+	}
+
+	return undef;
 }
 
 sub parseSequence {

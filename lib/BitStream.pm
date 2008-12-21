@@ -22,7 +22,7 @@ sub new {
 sub append {
 	my($s, $buf) = @_;
 	$s->{buf} .= $buf;
-	$s->{length} += length($buf);
+	$s->{length} = length($s->{buf});
 }
 
 sub bits_remain {
