@@ -38,6 +38,11 @@ sub execute {
 		my $atom = $s->getBytes(4);
 		my $end = $s->getPos() + $length - 8;
 
+		if ($length == 1) {
+			$length = $s->getLongLong();
+			$end = $s->getPos() + $length - 16;
+		}
+
 		if ($atom eq 'moov') {
 			next;
 		} elsif ($atom eq 'mvhd') {

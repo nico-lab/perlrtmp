@@ -174,11 +174,12 @@ sub serverToClient {
 sub getHandshake {
 	my($s, $client) = @_;
 	my @client_a = unpack('C*', $client);
+	my $schema = $client_a[4] << 24 | $client_a[5] << 16 | $client_a[6] << 8 | $client_a[7];
 
-	if ($client_a[4] == 0) {
+	if ($schema == 0) {
 		return $client;
 	} else {
-		my $s = ($client_a[8] + $client_a[9] + $client_a[10] + $client_a[11]) % 728 + 12;
+		my $s = $s->offset($schema, @client_a);
 		my $part = pack('C*', @client_a[$s .. $s + 31]);
 		my $a = hmac_sha256($part, KEY_SERVER);
 		my @server_a = ();
@@ -191,6 +192,16 @@ sub getHandshake {
 		$server .= hmac_sha256($server, $a);
 
 		return $server;
+	}
+}
+
+sub offset {
+	my($s, $schema, @client_a) = @_;
+
+	if ($schema < 0x80000302) {
+		return ($client_a[8] + $client_a[9] + $client_a[10] + $client_a[11]) % 728 + 12;
+	} else {
+		return ($client_a[772] + $client_a[773] + $client_a[774] + $client_a[775]) % 728 + 776;
 	}
 }
 
